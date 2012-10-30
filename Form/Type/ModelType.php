@@ -56,7 +56,7 @@ class ModelType extends AbstractType
     {
         $resolver->setDefaults(array(
             'compound'          => function (Options $options) {
-                return isset($options['multiple']) ? $options['multiple'] : false;
+                return isset($options['multiple']) && $options['expanded'] == 'true' ? $options['multiple'] : false;
             },
 
             'template'          => 'choice',
