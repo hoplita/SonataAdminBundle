@@ -16,7 +16,6 @@ use Symfony\Component\Translation\TranslatorInterface;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
-use Symfony\Component\Form\FormBuilderInterface;
 
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolverInterface;
@@ -48,20 +47,7 @@ class TranslatableChoiceType extends AbstractType
      */
     public function buildView(FormView $view, FormInterface $form, array $options)
     {
-        // translate options before building form
-        foreach ($view->vars['choices'] as $choiceView) {
-            $choiceView->label = $this->translator->trans($choiceView->label, array(), $options['catalogue']);
-        }
-
-        // translate preferred options
-        foreach ($view->vars['preferred_choices'] as $choiceView) {
-            $choiceView->label = $this->translator->trans($choiceView->label, array(), $options['catalogue']);
-        }
-
-        // translate empty value
-        if (!empty($view->vars['empty_value'])) {
-            $view->vars['empty_value'] = $this->translator->trans($view->vars['empty_value'], array(), $options['catalogue']);
-        }
+        $view->vars['translation_domain'] = $options['catalogue'];
     }
 
     /**

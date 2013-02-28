@@ -12,7 +12,6 @@
 namespace Sonata\AdminBundle\DependencyInjection;
 
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
-use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 /**
@@ -141,6 +140,9 @@ class Configuration implements ConfigurationInterface
                         ->scalarNode('delete')->defaultValue('SonataAdminBundle:CRUD:delete.html.twig')->cannotBeEmpty()->end()
                     ->end()
                 ->end()
+
+                ->scalarNode('persist_filters')->defaultValue(false)->cannotBeEmpty()->end()
+
             ->end()
         ->end();
 

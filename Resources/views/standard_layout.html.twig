@@ -78,9 +78,9 @@ file that was distributed with this source code.
                         <span class="icon-bar"></span>
                     </a>
 
-                    <div class="navbar-text pull-right">{% include admin_pool.getTemplate('user_block') %}</div>
-
                     {% if admin_pool is defined %}
+                        <div class="navbar-text pull-right">{% include admin_pool.getTemplate('user_block') %}</div>
+
                         {% block logo %}
                             <a href="{{ url('sonata_admin_dashboard') }}" class="brand">
                                 <img src="{{ asset(admin_pool.titlelogo) }}"  alt="{{ admin_pool.title }}" />
@@ -98,7 +98,7 @@ file that was distributed with this source code.
                                                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">{{ group.label|trans({}, group.label_catalogue) }} <span class="caret"></span></a>
                                                 <ul class="dropdown-menu">
                                                     {% for admin in group.items %}
-                                                        {% if admin.hasroute('create') and admin.isGranted('CREATE') or admin.hasroute('list') and admin.isGranted('LIST') %}
+                                                        {% if admin.hasroute('list') and admin.isGranted('LIST') %}
                                                             <li><a href="{{ admin.generateUrl('list')}}">{{ admin.label|trans({}, admin.translationdomain) }}</a></li>
                                                         {% endif %}
                                                     {% endfor %}
@@ -122,7 +122,14 @@ file that was distributed with this source code.
                         {% if action is defined %}
                             {% for label, uri in admin.breadcrumbs(action) %}
                                 {% if not loop.last  %}
-                                    <li><a href="{{ uri }}">{{ label }}</a><span class="divider">/</span></li>
+                                    <li>
+                                        {% if uri is not empty %}
+                                            <a href="{{ uri }}">{{ label }}</a>
+                                        {% else %}
+                                            {{ label }}
+                                        {% endif %}
+                                        <span class="divider">/</span>
+                                    </li>
                                 {% else %}
                                     <li class="active">{{ label }}</li>
                                 {% endif %}
@@ -214,4 +221,3 @@ file that was distributed with this source code.
         </div>
     </body>
 </html>
-

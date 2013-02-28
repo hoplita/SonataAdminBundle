@@ -35,6 +35,13 @@ Usage example:
 
     php app/console sonata:admin:explain sonata.news.admin.post
 
+.. figure:: ../images/console_admin_explain.png
+   :align: center
+   :alt: Explain command
+   :width: 700px
+
+   Explain command
+
 
 sonata:admin:list
 -----------------
@@ -51,11 +58,18 @@ Usage example:
     php app/console sonata:admin:list
 
 
+.. figure:: ../images/console_admin_list.png
+   :align: center
+   :alt: List command
+   :width: 700px
+
+   List command
+
 sonata:admin:setup-acl
 ----------------------
 
 The ``sonata:admin:setup-acl`` command updates ACL definitions for all admin
-classes available in ``sonata.admin.pool``. For instance everytime you create a
+classes available in ``sonata.admin.pool``. For instance every time you create a
 new ``Admin`` class, you can create ACL by using the ``sonata:admin:setup-acl``
 command. The ACL database will be automatically updated with the latest masks
 and roles informations.

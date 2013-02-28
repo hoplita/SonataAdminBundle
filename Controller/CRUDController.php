@@ -43,7 +43,7 @@ class CRUDController extends Controller
         // response is rendered through an iframe (used by the jquery.form.js plugin)
         //  => don't know yet if it is the best solution
         if ($this->get('request')->get('_xml_http_request')
-           && strpos($this->get('request')->headers->get('Content-Type'), 'multipart/form-data') === 0) {
+            && strpos($this->get('request')->headers->get('Content-Type'), 'multipart/form-data') === 0) {
             $headers['Content-Type'] = 'text/plain';
         } else {
             $headers['Content-Type'] = 'application/json';
@@ -188,7 +188,7 @@ class CRUDController extends Controller
             $this->get('session')->setFlash('sonata_flash_error', 'flash_batch_delete_error');
         }
 
-        return new RedirectResponse($this->admin->generateUrl('list', $this->admin->getFilterParameters()));
+        return new RedirectResponse($this->admin->generateUrl('list', array('filter' => $this->admin->getFilterParameters())));
     }
 
     /**
@@ -263,11 +263,11 @@ class CRUDController extends Controller
         $form->setData($object);
 
         if ($this->get('request')->getMethod() == 'POST') {
-            $form->bindRequest($this->get('request'));
+            $form->bind($this->get('request'));
 
             $isFormValid = $form->isValid();
 
-             // persist if the form was valid and if in preview mode the preview was approved
+            // persist if the form was valid and if in preview mode the preview was approved
             if ($isFormValid && (!$this->isInPreviewMode() || $this->isPreviewApproved())) {
                 $this->admin->update($object);
                 $this->get('session')->setFlash('sonata_flash_success', 'flash_edit_success');
@@ -285,7 +285,9 @@ class CRUDController extends Controller
 
             // show an error message if the form failed validation
             if (!$isFormValid) {
-                $this->get('session')->setFlash('sonata_flash_error', 'flash_edit_error');
+                if (!$this->isXmlHttpRequest()) {
+                    $this->get('session')->setFlash('sonata_flash_error', 'flash_edit_error');
+                }
             } elseif ($this->isPreviewRequested()) {
                 // enable the preview template if the form was valid and preview was requested
                 $templateKey = 'preview';
@@ -316,6 +318,9 @@ class CRUDController extends Controller
         $url = false;
 
         if ($this->get('request')->get('btn_update_and_list')) {
+            $url = $this->admin->generateUrl('list');
+        }
+        if ($this->get('request')->get('btn_create_and_list')) {
             $url = $this->admin->generateUrl('list');
         }
 
@@ -381,16 +386,18 @@ class CRUDController extends Controller
             $nonRelevantMessage = 'flash_batch_empty';
         }
 
+        $datagrid = $this->admin->getDatagrid();
+        $datagrid->buildPager();
+
         if (true !== $nonRelevantMessage) {
             $this->get('session')->setFlash('sonata_flash_info', $nonRelevantMessage);
 
-            return new RedirectResponse($this->admin->generateUrl('list', $this->admin->getFilterParameters()));
+            return new RedirectResponse($this->admin->generateUrl('list', array('filter' => $this->admin->getFilterParameters())));
         }
 
         $askConfirmation = isset($batchActions[$action]['ask_confirmation']) ? $batchActions[$action]['ask_confirmation'] : true;
 
         if ($askConfirmation && $confirmation != 'ok') {
-            $datagrid = $this->admin->getDatagrid();
             $formView = $datagrid->getForm()->createView();
 
             return $this->render('SonataAdminBundle:CRUD:batch_confirmation.html.twig', array(
@@ -407,8 +414,6 @@ class CRUDController extends Controller
             throw new \RuntimeException(sprintf('A `%s::%s` method must be created', get_class($this), $final_action));
         }
 
-        $datagrid = $this->admin->getDatagrid();
-        $datagrid->buildPager();
         $query = $datagrid->getQuery();
 
         $query->setFirstResult(null);
@@ -416,7 +421,7 @@ class CRUDController extends Controller
 
         if (count($idx) > 0) {
             $this->admin->getModelManager()->addIdentifiersToQuery($this->admin->getClass(), $query, $idx);
-        } else if (!$all_elements) {
+        } elseif (!$all_elements) {
             $query = null;
         }
 
@@ -447,7 +452,7 @@ class CRUDController extends Controller
         $form->setData($object);
 
         if ($this->get('request')->getMethod() == 'POST') {
-            $form->bindRequest($this->get('request'));
+            $form->bind($this->get('request'));
 
             $isFormValid = $form->isValid();
 
@@ -469,7 +474,9 @@ class CRUDController extends Controller
 
             // show an error message if the form failed validation
             if (!$isFormValid) {
-                $this->get('session')->setFlash('sonata_flash_error', 'flash_create_error');
+                if (!$this->isXmlHttpRequest()) {
+                    $this->get('session')->setFlash('sonata_flash_error', 'flash_create_error');
+                }
             } elseif ($this->isPreviewRequested()) {
                 // pick the preview template if the form was valid and preview was requested
                 $templateKey = 'preview';
@@ -606,8 +613,8 @@ class CRUDController extends Controller
     }
 
     /**
-     * @param null    $id
-     * @param string  $revision
+     * @param null   $id
+     * @param string $revision
      *
      * @throws \Symfony\Component\Security\Core\Exception\AccessDeniedException
      * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
@@ -670,7 +677,7 @@ class CRUDController extends Controller
 
         $allowedExportFormats = (array) $this->admin->getExportFormats();
 
-        if(!in_array($format, $allowedExportFormats) ) {
+        if (!in_array($format, $allowedExportFormats) ) {
             throw new \RuntimeException(sprintf('Export in format `%s` is not allowed for class: `%s`. Allowed formats are: `%s`', $format, $this->admin->getClass(), implode(', ', $allowedExportFormats)));
         }
 
