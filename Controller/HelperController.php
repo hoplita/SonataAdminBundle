@@ -14,6 +14,7 @@ namespace Sonata\AdminBundle\Controller;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Form\Util\PropertyPath;
 use Symfony\Component\HttpFoundation\Request;
 use Sonata\AdminBundle\Admin\Pool;
@@ -110,6 +111,7 @@ class HelperController
         $uniqid    = $request->get('uniqid');
 
         $admin = $this->pool->getInstance($code);
+        $admin->setRequest($request);
 
         if ($uniqid) {
             $admin->setUniqid($uniqid);
@@ -129,7 +131,7 @@ class HelperController
         $formBuilder = $admin->getFormBuilder($subject);
 
         $form = $formBuilder->getForm();
-        $form->bindRequest($request);
+        $form->bind($request);
 
         $view = $this->helper->getChildFormView($form->createView(), $elementId);
 
@@ -160,6 +162,8 @@ class HelperController
         if (!$admin) {
             throw new NotFoundHttpException();
         }
+
+        $admin->setRequest($request);
 
         if ($uniqid) {
             $admin->setUniqid($uniqid);
@@ -193,7 +197,7 @@ class HelperController
     }
 
     /**
-     * @param \Symfony\Component\HttpFoundation\Request $request
+     * @param  \Symfony\Component\HttpFoundation\Request  $request
      * @return \Symfony\Component\HttpFoundation\Response
      */
     public function setObjectFieldValueAction(Request $request)
@@ -205,47 +209,36 @@ class HelperController
         $context    = $request->get('context');
 
         $admin       = $this->pool->getInstance($code);
+        $admin->setRequest($request);
 
         // alter should be done by using a post method
         if ($request->getMethod() != 'POST') {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'Expected a POST Request')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'Expected a POST Request'));
         }
 
         $object = $admin->getObject($objectId);
 
         if (!$object) {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'Object does not exist')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'Object does not exist'));
         }
 
         // check user permission
         if (false === $admin->isGranted('EDIT', $object)) {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'Invalid permissions')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'Invalid permissions'));
         }
 
         if ($context == 'list') {
             $fieldDescription = $admin->getListFieldDescription($field);
         } else {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'Invalid context')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'Invalid context'));
         }
 
         if (!$fieldDescription) {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'The field does not exist')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'The field does not exist'));
         }
 
         if (!$fieldDescription->getOption('editable')) {
-            return new Response(json_encode(array('status' => 'KO', 'message' => 'The field cannot be edit, editable option must be set to true')), 200, array(
-                'Content-Type' => 'application/json'
-            ));
+            return new JsonResponse(array('status' => 'KO', 'message' => 'The field cannot be edit, editable option must be set to true'));
         }
 
         // TODO : call the validator component ...
@@ -261,8 +254,6 @@ class HelperController
 
         $content = $extension->renderListElement($object, $fieldDescription);
 
-        return new Response(json_encode(array('status' => 'OK', 'content' => $content)), 200, array(
-            'Content-Type' => 'application/json'
-        ));
+        return new JsonResponse(array('status' => 'OK', 'content' => $content));
     }
 }

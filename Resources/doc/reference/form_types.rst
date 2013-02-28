@@ -112,6 +112,8 @@ locked to 'yes' and 'no'.
 sonata_type_translatable_choice
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Deprecated: use ChoiceType with the translation_domain option instead.
+
 The translatable type is a specialized ``ChoiceType`` where the choices values 
 are translated with the Symfony Translator component.
 
@@ -145,3 +147,16 @@ The type has one extra parameter :
         'choices' => Delivery::getStatusList(),
         'catalogue' => 'SonataOrderBundle'
     ))
+
+Types options
+-------------
+
+General
+^^^^^^^
+
+- ``label``: You can set the ``label`` option to ``false`` if you don't want to show it.
+
+.. code-block:: php
+
+        <?php
+        $form->add('status', null, array('label' => false);

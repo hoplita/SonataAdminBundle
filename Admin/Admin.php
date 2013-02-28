@@ -15,7 +15,6 @@ use Symfony\Component\Form\Form;
 use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\Form\Util\PropertyPath;
 use Symfony\Component\Validator\ValidatorInterface;
-use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Translation\TranslatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Acl\Model\DomainObjectInterface;
@@ -43,7 +42,6 @@ use Sonata\AdminBundle\Model\ModelManagerInterface;
 
 use Knp\Menu\FactoryInterface as MenuFactoryInterface;
 use Knp\Menu\ItemInterface as MenuItemInterface;
-use Knp\Menu\MenuItem;
 
 abstract class Admin implements AdminInterface, DomainObjectInterface
 {
@@ -188,7 +186,15 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
      */
     protected $datagridValues = array(
         '_page'       => 1,
+        '_per_page'   => 25,
     );
+
+    /**
+     * Predefined per page options
+     *
+     * @var array
+     */
+    protected $perPageOptions = array(15, 25, 50, 100, 150, 200);
 
     /**
      * The code related to the admin
@@ -203,6 +209,13 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
      * @var string
      */
     protected $label;
+
+    /**
+     * Whether or not to persist the filters in the session
+     *
+     * @var boolean
+     */
+    protected $persistFilters = false;
 
     /**
      * Array of routes related to this admin
@@ -340,7 +353,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     protected $datagrid;
 
     /**
-     * The router intance
+     * The router instance
      *
      * @var RouteGeneratorInterface
      */
@@ -423,7 +436,6 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
     }
 
-
     /**
      * {@inheritdoc}
      */
@@ -433,6 +445,8 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     }
 
     /**
+     * @deprecated removed with Symfony 2.2
+     *
      * {@inheritdoc}
      */
     protected function configureShowField(ShowMapper $show)
@@ -459,7 +473,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     /**
      * {@inheritdoc}
      */
-    protected function configureSideMenu(MenuItemInterface $menu, $action, Admin $childAdmin = null)
+    protected function configureSideMenu(MenuItemInterface $menu, $action, AdminInterface $childAdmin = null)
     {
 
     }
@@ -511,6 +525,9 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
         $this->code                 = $code;
         $this->class                = $class;
         $this->baseControllerName   = $baseControllerName;
+
+        $this->predefinePerPageOptions();
+        $this->datagridValues['_per_page'] = $this->maxPerPage;
     }
 
     /**
@@ -683,11 +700,26 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
         // build the values array
         if ($this->hasRequest()) {
+            $filters = $this->request->query->get('filter', array());
+
+            // if persisting filters, save filters to session, or pull them out of session if no new filters set
+            if ($this->persistFilters) {
+                if ($filters == array() && $this->request->query->get('filters') != 'reset') {
+                    $filters = $this->request->getSession()->get($this->getCode().'.filter.parameters', array());
+                } else {
+                    $this->request->getSession()->set($this->getCode().'.filter.parameters', $filters);
+                }
+            }
+
             $parameters = array_merge(
                 $this->getModelManager()->getDefaultSortValues($this->getClass()),
                 $this->datagridValues,
-                $this->request->query->get('filter', array())
+                $filters
             );
+
+            if (!$this->determinedPerPageValue($parameters['_per_page'])) {
+                $parameters['_per_page'] = $this->maxPerPage;
+            }
 
             // always force the parent value
             if ($this->isChild() && $this->getParentAssociationMapping()) {
@@ -727,7 +759,6 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
         // initialize the datagrid
         $this->datagrid = $this->getDatagridBuilder()->getBaseDatagrid($this, $filterParameters);
 
-        $this->datagrid->getPager()->setMaxPerPage($this->maxPerPage);
         $this->datagrid->getPager()->setMaxPageLinks($this->maxPageLinks);
 
         $mapper = new DatagridMapper($this->getDatagridBuilder(), $this->datagrid, $this);
@@ -860,7 +891,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
      * urlize the given word
      *
      * @param string $word
-     * @param string $sep the separator
+     * @param string $sep  the separator
      *
      * @return string
      */
@@ -900,7 +931,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     /**
      * Gets the subclass corresponding to the given name
      *
-     * @param  string $name The name of the sub class
+     * @param string $name The name of the sub class
      *
      * @return string the subclass
      */
@@ -916,7 +947,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     /**
      * Returns true if the admin has the sub classes
      *
-     * @param  string $name The name of the sub class
+     * @param string $name The name of the sub class
      *
      * @return bool
      */
@@ -1028,7 +1059,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
         $this->configureRoutes($this->routes);
 
-        foreach($this->getExtensions() as $extension) {
+        foreach ($this->getExtensions() as $extension) {
             $extension->configureRoutes($this, $this->routes);
         }
     }
@@ -1056,16 +1087,24 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     {
         $this->buildRoutes();
 
+        if (
+            ! $this->isChild()
+            && strpos($name, '.') !== false
+            && strpos($name, $this->getBaseCodeRoute() . '|') !== 0
+            && strpos($name, $this->getBaseCodeRoute() . '.') !== 0
+        ) {
+            $name = $this->getCode() . '|' . $name;
+        }
+
         return $this->routes->has($name);
     }
-
 
     /**
      * Generates the object url with the given $name
      *
-     * @param string  $name
-     * @param mixed   $object
-     * @param array   $parameters
+     * @param string $name
+     * @param mixed  $object
+     * @param array  $parameters
      *
      * @return string return a complete url
      */
@@ -1140,10 +1179,49 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
      */
     public function getFormBuilder()
     {
+        $this->formOptions['data_class'] = $this->getActiveSubClass() ?: $this->getClass();
+
+        $formBuilder = $this->getFormContractor()->getFormBuilder(
+            $this->getUniqid(),
+            $this->formOptions
+        );
+
+        $this->defineFormBuilder($formBuilder);
+
+        return $formBuilder;
+    }
+
+    /**
+     * This method is being called by the main admin class and the child class,
+     * the getFormBuilder is only call by the main admin class
+     *
+     * @param \Symfony\Component\Form\FormBuilder $formBuilder
+     *
+     * @return void
+     */
+    public function defineFormBuilder(FormBuilder $formBuilder)
+    {
+        $mapper = new FormMapper($this->getFormContractor(), $formBuilder, $this);
+
+        $this->configureFormFields($mapper);
+
+        foreach ($this->getExtensions() as $extension) {
+            $extension->configureFormFields($mapper);
+        }
+
+        $this->attachInlineValidator();
+    }
+
+    /**
+     * Attach the inline validator to the model metadata, this must be done once per admin
+     */
+    protected function attachInlineValidator()
+    {
         $admin = $this;
 
         // add the custom inline validation option
         $metadata = $this->validator->getMetadataFactory()->getClassMetadata($this->getClass());
+
         $metadata->addConstraint(new InlineConstraint(array(
             'service' => $this,
             'method'  => function(ErrorElement $errorElement, $object) use ($admin) {
@@ -1162,33 +1240,6 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
                 }
             }
         )));
-
-        $this->formOptions['data_class'] = $this->getActiveSubClass() ?: $this->getClass();
-
-        $formBuilder = $this->getFormContractor()->getFormBuilder(
-            $this->getUniqid(),
-            $this->formOptions
-        );
-
-        $this->defineFormBuilder($formBuilder);
-
-        return $formBuilder;
-    }
-
-    /**
-     * @param \Symfony\Component\Form\FormBuilder $formBuilder
-     *
-     * @return void
-     */
-    public function defineFormBuilder(FormBuilder $formBuilder)
-    {
-        $mapper = new FormMapper($this->getFormContractor(), $formBuilder, $this);
-
-        $this->configureFormFields($mapper);
-
-        foreach ($this->getExtensions() as $extension) {
-            $extension->configureFormFields($mapper);
-        }
     }
 
     /**
@@ -1289,7 +1340,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
         $menu = $this->menuFactory->createItem('root');
         $menu->setChildrenAttribute('class', 'nav nav-list');
-        $menu->setCurrentUri($this->getRequest()->getRequestUri());
+        $menu->setCurrentUri($this->getRequest()->getBaseUrl().$this->getRequest()->getPathInfo());
 
         $this->configureSideMenu($menu, $action, $childAdmin);
 
@@ -1337,7 +1388,6 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
         $parentFieldDescription = $this->getParentFieldDescription();
 
         if (!$parentFieldDescription) {
-
             return $this;
         }
 
@@ -1374,6 +1424,14 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     public function getLabel()
     {
         return $this->label;
+    }
+
+    /**
+     * @param boolean $persist
+     */
+    public function setPersistFilters($persist)
+    {
+        $this->persistFilters = $persist;
     }
 
     /**
@@ -1905,7 +1963,7 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
         $child = $child->addChild(
             $this->trans($this->getLabelTranslatorStrategy()->getLabel(sprintf('%s_list', $this->getClassnameLabel()), 'breadcrumb', 'link')),
-            array('uri' => $this->generateUrl('list'))
+            array('uri' => $this->hasRoute('list') && $this->isGranted('LIST') ? $this->generateUrl('list') : null)
         );
 
         $childAdmin = $this->getCurrentChildAdmin();
@@ -1914,8 +1972,8 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
             $id = $this->request->get($this->getIdParameter());
 
             $child = $child->addChild(
-                (string) $this->getSubject(),
-                array('uri' => $this->generateUrl('edit', array('id' => $id)))
+                $this->toString($this->getSubject()),
+                array('uri' => $this->hasRoute('edit') && $this->isGranted('EDIT') ? $this->generateUrl('edit', array('id' => $id)) : null)
             );
 
             return $childAdmin->buildBreadcrumbs($action, $child);
@@ -1924,19 +1982,19 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
             if ($action != 'list') {
                 $menu = $menu->addChild(
                     $this->trans($this->getLabelTranslatorStrategy()->getLabel(sprintf('%s_list', $this->getClassnameLabel()), 'breadcrumb', 'link')),
-                    array('uri' => $this->generateUrl('list'))
+                    array('uri' => $this->hasRoute('list') && $this->isGranted('LIST') ? $this->generateUrl('list') : null)
                 );
             }
 
             if ($action != 'create' && $this->hasSubject()) {
-                $breadcrumbs = $menu->getBreadcrumbsArray((string) $this->getSubject());
+                $breadcrumbs = $menu->getBreadcrumbsArray($this->toString($this->getSubject()));
             } else {
                 $breadcrumbs = $menu->getBreadcrumbsArray(
                     $this->trans($this->getLabelTranslatorStrategy()->getLabel(sprintf('%s_%s', $this->getClassnameLabel(), $action), 'breadcrumb', 'link'))
                 );
             }
 
-        } else if ($action != 'list') {
+        } elseif ($action != 'list') {
             $breadcrumbs = $child->getBreadcrumbsArray(
                 $this->trans($this->getLabelTranslatorStrategy()->getLabel(sprintf('%s_%s', $this->getClassnameLabel(), $action), 'breadcrumb', 'link'))
             );
@@ -2023,7 +2081,6 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
 
         return $this->translator->transChoice($id, $count, $parameters, $domain, $locale);
     }
-
 
     /**
      * set the translation domain
@@ -2474,10 +2531,10 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     public function toString($object)
     {
         if (method_exists($object, '__toString')) {
-            return (string)$object;
+            return (string) $object;
         }
 
-        return '';
+        return sprintf("%s:%s", get_class($object), spl_object_hash($object));
     }
 
     /**
@@ -2506,5 +2563,46 @@ abstract class Admin implements AdminInterface, DomainObjectInterface
     public function supportsPreviewMode()
     {
         return $this->supportsPreviewMode;
+    }
+
+    /**
+     * Set custom per page options
+     *
+     * @param $options
+     */
+    public function setPerPageOptions($options)
+    {
+        $this->perPageOptions = $options;
+    }
+
+    /**
+     * Returns predefined per page options
+     *
+     * @return array
+     */
+    public function getPerPageOptions()
+    {
+        return $this->perPageOptions;
+    }
+
+    /**
+     * Returns true if the per page value is allowed, false otherwise
+     *
+     * @param $per_page
+     * @return bool
+     */
+    public function determinedPerPageValue($per_page)
+    {
+        return in_array($per_page, $this->perPageOptions);
+    }
+
+    /**
+     * Predefine per page options
+     */
+    protected function predefinePerPageOptions()
+    {
+        array_unshift($this->perPageOptions, $this->maxPerPage);
+        $this->perPageOptions = array_unique($this->perPageOptions);
+        sort($this->perPageOptions);
     }
 }
